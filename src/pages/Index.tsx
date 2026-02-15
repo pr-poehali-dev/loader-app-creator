@@ -3,7 +3,7 @@ import Icon from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 
-type Tab = "home" | "settings";
+type Tab = "home" | "settings" | "logs";
 
 interface CheckItem {
   label: string;
@@ -21,6 +21,10 @@ const Index = () => {
   const [isLaunching, setIsLaunching] = useState(false);
   const [launchProgress, setLaunchProgress] = useState(0);
   const [launchReady, setLaunchReady] = useState(false);
+  const [logs, setLogs] = useState<{ time: string; type: "info" | "success" | "warn" | "error"; msg: string }[]>([
+    { time: "00:00:00", type: "info", msg: "[SYS] Sp1rtExternal Loader v2.4.1 initialized" },
+    { time: "00:00:01", type: "info", msg: "[SYS] Waiting for user action..." },
+  ]);
   const [settings, setSettings] = useState({
     autoInject: true,
     hideOverlay: false,
@@ -28,10 +32,19 @@ const Index = () => {
     debugMode: false,
   });
 
+  const addLog = (type: "info" | "success" | "warn" | "error", msg: string) => {
+    const now = new Date();
+    const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
+      .map((v) => String(v).padStart(2, "0"))
+      .join(":");
+    setLogs((prev) => [...prev, { time, type, msg }]);
+  };
+
   const runChecks = () => {
     setIsLaunching(true);
     setLaunchReady(false);
     setLaunchProgress(0);
+    addLog("info", "[LAUNCH] Starting pre-launch checks...");
 
     const newChecks: CheckItem[] = checks.map((c) => ({
       ...c,
@@ -39,8 +52,16 @@ const Index = () => {
     }));
     setChecks(newChecks);
 
+    const logMessages = [
+      { start: "[CHECK] Scanning cheat files...", end: "[CHECK] Files integrity OK — 47 modules loaded" },
+      { start: "[NET] Connecting to relay server...", end: "[NET] Connected to sp1rt-relay-eu-1 (ping: 24ms)" },
+      { start: "[UPD] Checking for updates...", end: "[UPD] Version 2.4.1 is up to date" },
+      { start: "[INIT] Initializing injection modules...", end: "[INIT] All modules ready — ESP, AIM, MISC" },
+    ];
+
     newChecks.forEach((_, i) => {
       setTimeout(() => {
+        addLog("info", logMessages[i].start);
         setChecks((prev) =>
           prev.map((c, idx) =>
             idx === i ? { ...c, status: "checking" } : c
@@ -48,6 +69,7 @@ const Index = () => {
         );
 
         setTimeout(() => {
+          addLog("success", logMessages[i].end);
           setChecks((prev) =>
             prev.map((c, idx) =>
               idx === i ? { ...c, status: "ok" } : c
@@ -57,6 +79,7 @@ const Index = () => {
 
           if (i === newChecks.length - 1) {
             setTimeout(() => {
+              addLog("success", "[SYS] All checks passed — ready to inject");
               setLaunchReady(true);
             }, 400);
           }
@@ -66,10 +89,19 @@ const Index = () => {
   };
 
   const handleLaunch = () => {
-    setIsLaunching(false);
-    setLaunchReady(false);
-    setLaunchProgress(0);
-    setChecks(checks.map((c) => ({ ...c, status: "pending" })));
+    addLog("warn", "[INJECT] Injecting into Standoff 2 process...");
+    setTimeout(() => {
+      addLog("success", "[INJECT] Successfully injected! PID: 18472");
+      addLog("info", "[GAME] Launching Standoff 2...");
+      setTimeout(() => {
+        addLog("success", "[GAME] Game launched — overlay active");
+        addLog("info", "[SYS] Waiting for user action...");
+        setIsLaunching(false);
+        setLaunchReady(false);
+        setLaunchProgress(0);
+        setChecks(checks.map((c) => ({ ...c, status: "pending" })));
+      }, 800);
+    }, 600);
   };
 
   useEffect(() => {
@@ -116,6 +148,17 @@ const Index = () => {
           >
             <Icon name="Home" size={16} />
             Главная
+          </button>
+          <button
+            onClick={() => setTab("logs")}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-mono transition-all ${
+              tab === "logs"
+                ? "bg-primary/10 text-primary neon-border"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Icon name="Terminal" size={16} />
+            Логи
           </button>
           <button
             onClick={() => setTab("settings")}
@@ -202,6 +245,51 @@ const Index = () => {
                 <StatCard icon="Users" label="Онлайн" value="1,247" />
                 <StatCard icon="Shield" label="Статус" value="Актив" />
                 <StatCard icon="Clock" label="Аптайм" value="99.8%" />
+              </div>
+            </div>
+          )}
+
+          {tab === "logs" && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl border border-border bg-card/60 backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold font-mono text-foreground flex items-center gap-2">
+                    <Icon name="Terminal" size={16} className="text-primary" />
+                    Консоль
+                  </h3>
+                  <button
+                    onClick={() => setLogs([])}
+                    className="text-xs font-mono text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded border border-border/50 hover:border-primary/30"
+                  >
+                    Очистить
+                  </button>
+                </div>
+                <div className="bg-[hsl(160_12%_5%)] rounded-lg border border-border/50 p-3 max-h-[420px] overflow-y-auto font-mono text-xs space-y-1 scrollbar-thin">
+                  {logs.length === 0 && (
+                    <p className="text-muted-foreground/40 text-center py-8">Логи пусты</p>
+                  )}
+                  {logs.map((log, i) => (
+                    <div key={i} className="flex gap-2 leading-relaxed">
+                      <span className="text-muted-foreground/40 shrink-0">{log.time}</span>
+                      <span
+                        className={
+                          log.type === "success"
+                            ? "text-primary"
+                            : log.type === "warn"
+                            ? "text-yellow-400"
+                            : log.type === "error"
+                            ? "text-red-400"
+                            : "text-foreground/60"
+                        }
+                      >
+                        {log.msg}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-1 pt-1">
+                    <span className="text-primary animate-pulse-neon">▊</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
